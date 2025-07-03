@@ -69,7 +69,7 @@ function startBot() {
 
     bot.on("error", (err) => {
         console.error("Error:", err);
-        startBot(); // Restart the bot on error
+        bot.end();
     });
     
     bot.on("kicked", (reason) => {
@@ -78,6 +78,11 @@ function startBot() {
             commandInterval = null;
         }
         console.error("Kicked:", reason);
+        bot.end();
+    });
+
+    bot.on("end", () => {
+        console.log("Bot has ended. Attempting to reconnect...");
         if (rejoinDelay !== null) {
             console.log(`Rejoining in ${rejoinDelay} milliseconds...`);
             setTimeout(() => {
