@@ -2,5 +2,3 @@
 !.env*.template
 node_modules
 dist
-afkbotarm
-afkbotx64
