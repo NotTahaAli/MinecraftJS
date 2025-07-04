@@ -1,5 +1,12 @@
 import client from 'mineflayer';
+import readline from 'readline';
 require('dotenv').config();
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true
+})
 
 const host: string = process.env.MINECRAFT_HOST || 'localhost';
 const username: string = process.env.MINECRAFT_USERNAME || 'TestBot';
@@ -21,11 +28,21 @@ const botOptions: client.BotOptions = {
 }
 let bot: client.Bot;
 
+let online: boolean = false;
+let restart: boolean = true;
+
 async function loggedIn() {
+    online = true;
     console.log("Login successful!");
     if (startupCommands && startupCommands.length > 0) {
         console.log("Executing startup commands...");
         for (const command of startupCommands) {
+            if (!online) {
+                console.log("Waiting for bot to be online before executing");
+                while (!online) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
             console.log(`Executing command: ${command}`);
             bot.chat(command);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -38,9 +55,13 @@ async function loggedIn() {
         commandInterval = setInterval(async () => {
             console.log("Executing recurring commands...");
             for (const command of recurringCommands) {
-                console.log(`Executing command: ${command}`);
-                bot.chat(command);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                if (!online) {
+                    console.log(`Skipping command: ${command} because bot is not online`);
+                } else {
+                    console.log(`Executing command: ${command}`);
+                    bot.chat(command);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
         }, interval+(delay * (recurringCommands.length - 1)));
     } else {
@@ -73,24 +94,27 @@ function startBot() {
     });
     
     bot.on("kicked", (reason) => {
-        if (commandInterval) {
-            clearInterval(commandInterval);
-            commandInterval = null;
-        }
         console.error("Kicked:", reason);
         bot.end();
     });
 
     bot.on("end", () => {
-        console.log("Bot has ended. Attempting to reconnect...");
-        if (rejoinDelay !== null) {
-            console.log(`Rejoining in ${rejoinDelay} milliseconds...`);
-            setTimeout(() => {
-                console.log("Rejoining the server...");
-                startBot();
-            }, rejoinDelay);
-        } else {
-            console.log("Rejoin delay is not set, not attempting to reconnect.");
+        online = false;
+        if (commandInterval) {
+            clearInterval(commandInterval);
+            commandInterval = null;
+        }
+        if (restart) {
+            console.log("Bot has ended. Attempting to reconnect...");
+            if (rejoinDelay !== null) {
+                console.log(`Rejoining in ${rejoinDelay} milliseconds...`);
+                setTimeout(() => {
+                    console.log("Rejoining the server...");
+                    startBot();
+                }, rejoinDelay);
+            } else {
+                console.log("Rejoin delay is not set, not attempting to reconnect.");
+            }
         }
     });
 
@@ -100,7 +124,7 @@ function startBot() {
     });
     bot.on("message", (message, position) => {
         if (position == "game_info") return; // Ignore game info messages
-        console.log(`Message from ${position} at ${Date.now().toString()}:`, message.toAnsi());
+        console.log(`Message from ${position} at ${Date.now()}:`, message.toAnsi());
         if (message.toString().includes("Please, login with the command: /login <password>")) {
             console.log("Login message detected. Attempting to log in...");
             bot.chat("/login " + password);
@@ -120,3 +144,28 @@ function startBot() {
 }
 
 startBot();
+rl.addListener("line", (line) => {
+    if (line.trim() === "exit") {
+        console.log("Exiting...");
+        if (commandInterval) {
+            clearInterval(commandInterval);
+            commandInterval = null;
+        }
+        restart = false;
+        bot.end();
+        rl.close();
+    } else if (line.trim() === "restart") {
+        console.log("Restarting bot...");
+        bot.end();
+    } else {
+        console.log(`Sending command to bot: ${line}`);
+        if (!online) {
+            console.log("Bot is not online. Waiting for bot to be online before sending command.");
+            while (!online) {
+                // Wait until the bot is online
+                new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        bot.chat(line);
+    }
+});

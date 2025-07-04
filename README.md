@@ -15,6 +15,7 @@ MinecraftJS is a configurable bot that can connect to Minecraft servers, handle 
 - Resource pack handling
 - Death detection and automatic respawn
 - Customizable through environment variables
+- Ability to Interact with Minecraft Chat in Real time.
 
 ## Installation
 
